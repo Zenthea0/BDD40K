@@ -131,25 +131,39 @@ function Html({
 function StatLine({
   m
 }) {
+  const hasInv = m.inv_sv && m.inv_sv !== '-';
   const cells = [['M', m.M], ['T', m.T], ['SV', m.Sv], ['W', m.W], ['LD', m.Ld], ['OC', m.OC]];
   return /*#__PURE__*/React.createElement("div", null, m.name ? /*#__PURE__*/React.createElement("div", {
     className: "disp text-[13px] uppercase tracking-wide muted mb-1"
   }, m.name) : null, /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-6 gap-1.5"
+    className: "grid grid-cols-6 gap-1.5 items-start"
   }, cells.map(([k, v]) => /*#__PURE__*/React.createElement("div", {
     key: k,
+    className: "space-y-1.5"
+  }, /*#__PURE__*/React.createElement("div", {
     className: "statbox px-1 py-1.5 text-center"
   }, /*#__PURE__*/React.createElement("div", {
     className: "disp text-[10px] muted leading-none mb-1"
   }, k), /*#__PURE__*/React.createElement("div", {
     className: "mono text-[15px] leading-none ink"
-  }, v || '–')))), m.inv_sv && m.inv_sv !== '-' ? /*#__PURE__*/React.createElement("div", {
-    className: "mt-1.5 flex items-center gap-2 text-[12px]"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "statbox px-2 py-1 mono ink"
-  }, m.inv_sv), /*#__PURE__*/React.createElement("span", {
-    className: "muted"
-  }, "save invulnerable", m.inv_sv_descr ? ' — ' + m.inv_sv_descr : '')) : null);
+  }, v || '–')), k === 'SV' && hasInv ? /*#__PURE__*/React.createElement("div", {
+    className: "statbox px-1 py-1.5 text-center",
+    style: {
+      borderColor: 'var(--steel)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "disp text-[10px] leading-none mb-1",
+    style: {
+      color: 'var(--steel)'
+    }
+  }, "INV"), /*#__PURE__*/React.createElement("div", {
+    className: "mono text-[15px] leading-none ink"
+  }, m.inv_sv, "+")) : null))), hasInv && m.inv_sv_descr ? /*#__PURE__*/React.createElement("div", {
+    className: "mt-1.5 text-[12px]",
+    style: {
+      color: 'var(--steel)'
+    }
+  }, "Invuln\xE9rable \u2014 ", m.inv_sv_descr) : null);
 }
 
 // ---- Bloc d'arme (compact mobile) ----
@@ -643,6 +657,7 @@ function App() {
   const [detachment, setDetachment] = useState('');
   const [role, setRole] = useState('');
   const [showLegends, setShowLegends] = useState(false);
+  const [showAllied, setShowAllied] = useState(false);
   const [nav, setNav] = useState(null); // {type:'ds'|'det', id}
   const scrollRef = useRef(0);
   useEffect(() => {
@@ -675,6 +690,7 @@ function App() {
     if (section === 'ds') {
       return idx.datasheets.filter(d => {
         if (!showLegends && d.legends) return false;
+        if (!showAllied && d.allied) return false;
         if (faction && d.faction_id !== faction) return false;
         if (role && d.role !== role) return false;
         if (nq) {
@@ -691,7 +707,7 @@ function App() {
         return true;
       });
     }
-  }, [idx, section, q, faction, role, showLegends]);
+  }, [idx, section, q, faction, role, showLegends, showAllied]);
   const openDs = id => {
     scrollRef.current = window.scrollY;
     setNav({
@@ -810,7 +826,16 @@ function App() {
       border: '1px solid ' + (showLegends ? '#8a6a2b' : 'var(--line)'),
       color: showLegends ? '#d9a441' : 'var(--muted)'
     }
-  }, showLegends ? 'Legends ✓' : 'Legends') : null))), /*#__PURE__*/React.createElement("main", null, nav?.type === 'ds' ? /*#__PURE__*/React.createElement(DatasheetView, {
+  }, showLegends ? 'Legends ✓' : 'Legends') : null, section === 'ds' ? /*#__PURE__*/React.createElement("button", {
+    onClick: () => setShowAllied(v => !v),
+    title: "Afficher / masquer les unit\xE9s alli\xE9es",
+    className: "disp uppercase text-[12px] tracking-wide rounded-lg px-2.5 py-1.5 shrink-0",
+    style: {
+      background: 'var(--surface2)',
+      border: '1px solid ' + (showAllied ? '#4c5b6b' : 'var(--line)'),
+      color: showAllied ? 'var(--steel)' : 'var(--muted)'
+    }
+  }, showAllied ? 'Alliés ✓' : 'Alliés') : null))), /*#__PURE__*/React.createElement("main", null, nav?.type === 'ds' ? /*#__PURE__*/React.createElement(DatasheetView, {
     id: nav.id,
     demo: state.demo,
     indexById: indexById,
