@@ -1172,6 +1172,7 @@ function analyzeUnit(d) {
     antiTank: weapons.some(w => w.cats.antiTank),
     antiInf: weapons.some(w => w.cats.antiInf),
     antiElite: weapons.some(w => w.cats.antiElite),
+    hasVolume: weapons.some(w => w.cats.volume),
     oc2: models.some(m => {
       const o = intOf(m.OC);
       return o != null && o >= 2;
@@ -1185,7 +1186,7 @@ const COMBO_LABELS = {
   critfish: ['CRITIQUES', '#3f6f8f'],
   ignorescover: ['IGNORE COUVERT', '#3f6f8f']
 };
-function unitBadges(u) {
+function unitLineBadges(u) {
   const b = [];
   if (u.uf.character) b.push(['PERSONNAGE', '#7c1f22']);
   if (u.uf.deepStrike) b.push(['FRAPPE EN PROFONDEUR', '#b3282d']);
@@ -1197,11 +1198,20 @@ function unitBadges(u) {
   if (u.uf.overwatch) b.push(['OVERWATCH', '#3f6f8f']);
   if (u.uf.armored) b.push(['BLIND\u00c9', '#9a7a2e']);
   if (u.uf.resilient) b.push(['R\u00c9SISTANT', '#9a7a2e']);
+  return b;
+}
+function weaponLineBadges(u) {
+  const b = [];
+  if (u.antiTank) b.push(['ANTI-CHAR', '#7c1f22']);
+  if (u.antiInf) b.push(['ANTI-INF', '#7c1f22']);
+  if (u.antiElite) b.push(['ANTI-\u00c9LITE', '#7c1f22']);
+  if (u.hasVolume) b.push(['VOLUME', '#7c1f22']);
   u.uCombos.forEach(c => {
     if (COMBO_LABELS[c]) b.push(COMBO_LABELS[c]);
   });
   return b;
 }
+const LEGEND = [['PERSONNAGE', '#7c1f22', 'Unit\u00e9 avec le mot-cl\u00e9 Character.'], ['FRAPPE EN PROFONDEUR', '#b3282d', 'Arrive de r\u00e9serve (Deep Strike) et peut charger en arrivant.'], ['SCOUT', '#b3282d', 'Mouvement gratuit avant la partie.'], ['INFILTRATORS', '#b3282d', 'D\u00e9ploiement avanc\u00e9, \u00e0 9\u2033+ des ennemis.'], ['RAPIDE', '#b3282d', 'Mouvement \u2265 10\u2033.'], ['FLY', '#3f6f8f', 'Peut voler (ignore terrain et unit\u00e9s).'], ['LONE OP', '#3f6f8f', 'Inciblable \u00e0 plus de 12\u2033 (hors escorte).'], ['OVERWATCH', '#3f6f8f', 'Arme Torrent : tir r\u00e9actif efficace (sauf Titanic).'], ['BLIND\u00c9', '#9a7a2e', 'Endurance \u2265 8 (Monster/Vehicle).'], ['R\u00c9SISTANT', '#9a7a2e', 'Endurance 6-7 hors Monster/Vehicle : dur \u00e0 tuer.'], ['ANTI-CHAR', '#7c1f22', 'Arme F\u22658 ou D\u22654 (d\u00e9s inclus), ou Melta/Lance/Anti-Vehicle/Monster.'], ['ANTI-INF', '#7c1f22', 'Arme Anti-Infantry, Torrent, Blast, ou tir \u00e0 \u22653 attaques.'], ['ANTI-\u00c9LITE', '#7c1f22', 'Bon PA + multi-d\u00e9g\u00e2ts, Devastating Wounds ou Precision.'], ['VOLUME', '#7c1f22', 'Gros d\u00e9bit (tir \u22653 ; m\u00eal\u00e9e \u22654 / perso \u22656 ; Sustained Hits \u22652).'], ['\u26A0 CAUCHEMAR', '#b3282d', 'Arme Anti-X + Devastating Wounds : mortelles qui ignorent les saves.'], ['SNIPER', '#b3282d', 'R\u00e8gle Precision native : vise les personnages.'], ['CRITIQUES', '#3f6f8f', 'Sustained Hits + Lethal Hits : p\u00eache au critique.'], ['IGNORE COUVERT', '#3f6f8f', 'Arme Ignores Cover.']];
 function wCatBadges(w) {
   const b = [];
   if (w.cats.antiTank) b.push('ANTI-CHAR');
@@ -1656,14 +1666,38 @@ function AnalysisView({
       display: 'flex',
       flexWrap: 'wrap',
       gap: 5,
-      margin: '6px 0'
+      marginTop: 6,
+      alignItems: 'center'
     }
-  }, unitBadges(u).map((b, j) => /*#__PURE__*/React.createElement(LFlag, {
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: '#8a8f98',
+      marginRight: 2
+    }
+  }, "UNIT\xC9"), unitLineBadges(u).map((b, j) => /*#__PURE__*/React.createElement(LFlag, {
     key: j,
     color: b[1]
-  }, b[0]))), /*#__PURE__*/React.createElement("div", {
+  }, b[0]))), weaponLineBadges(u).length ? /*#__PURE__*/React.createElement("div", {
     style: {
-      margin: '4px 0'
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 5,
+      marginTop: 4,
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 9,
+      color: '#8a8f98',
+      marginRight: 2
+    }
+  }, "ARMES"), weaponLineBadges(u).map((b, j) => /*#__PURE__*/React.createElement(LFlag, {
+    key: j,
+    color: b[1]
+  }, b[0]))) : null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: '6px 0 4px'
     }
   }, (u.d.models || []).map((m, j) => /*#__PURE__*/React.createElement(StatLine, {
     key: j,
@@ -1695,22 +1729,27 @@ function AnalysisView({
     style: {
       fontSize: 15
     }
-  }, w.name), wCatBadges(w).map((c, k) => /*#__PURE__*/React.createElement(LFlag, {
-    key: k
-  }, c))), /*#__PURE__*/React.createElement("div", {
+  }, w.name)), /*#__PURE__*/React.createElement("div", {
     className: "mono",
     style: {
       fontSize: 11.5,
       color: '#5c626e',
       marginTop: 1
     }
-  }, (w.ranged ? [['R', w.range], ['A', w.A], ['CT', w.BS_WS], ['F', w.S], ['PA', w.AP], ['D', w.D]] : [['A', w.A], ['CC', w.BS_WS], ['F', w.S], ['PA', w.AP], ['D', w.D]]).map(([k, v]) => k + ' ' + (v || '–')).join('   '), w.abilities && w.abilities.length ? '   [' + w.abilities.map(a => a.keyword === 'anti' ? 'anti-' + a.anti_target + ' ' + a.anti_threshold : a.raw).join(', ') + ']' : ''), w.combos.length ? /*#__PURE__*/React.createElement("div", {
+  }, (w.ranged ? [['R', w.range], ['A', w.A], ['CT', w.BS_WS], ['F', w.S], ['PA', w.AP], ['D', w.D]] : [['A', w.A], ['CC', w.BS_WS], ['F', w.S], ['PA', w.AP], ['D', w.D]]).map(([k, v]) => k + ' ' + (v || '–')).join('   ')), w.abilities && w.abilities.length ? /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11.5,
-      color: '#b3282d',
-      fontWeight: 600
+      marginTop: 2,
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 6
     }
-  }, "\u26A0 ", w.combos.map(c => c.t === 'nightmare' ? 'Anti-' + c.target + ' + Devastating Wounds' : c.t).join(' · ')) : null))), u.d.abilities && (u.d.abilities.core || []).length ? /*#__PURE__*/React.createElement("div", {
+  }, w.abilities.map((a, k) => /*#__PURE__*/React.createElement("span", {
+    key: k,
+    className: "wk",
+    style: {
+      fontSize: 11
+    }
+  }, a.keyword === 'anti' ? 'anti-' + a.anti_target + ' ' + a.anti_threshold : a.raw))) : null))), u.d.abilities && (u.d.abilities.core || []).length ? /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 6,
       display: 'flex',
@@ -1752,10 +1791,43 @@ function AnalysisView({
       textTransform: 'uppercase',
       letterSpacing: '.03em'
     }
-  }, [...(u.d.faction_keywords || []), ...(u.d.keywords || [])].join(' · ')))))));
+  }, [...(u.d.faction_keywords || []), ...(u.d.keywords || [])].join(' · '))))), /*#__PURE__*/React.createElement("div", {
+    className: "analysis-block",
+    style: {
+      marginTop: 16,
+      borderTop: '2px solid #b3282d',
+      paddingTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "disp",
+    style: {
+      fontSize: 16,
+      textTransform: 'uppercase',
+      marginBottom: 6
+    }
+  }, "L\xE9gende des indicateurs"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gap: 3,
+      fontSize: 11,
+      color: '#333'
+    }
+  }, LEGEND.map((l, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: 'flex',
+      gap: 8,
+      alignItems: 'baseline'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      minWidth: 132
+    }
+  }, /*#__PURE__*/React.createElement(LFlag, {
+    color: l[1]
+  }, l[0])), /*#__PURE__*/React.createElement("span", null, l[2])))))));
 }
-
-// ---- App ----
 function App() {
   const [state, setState] = useState({
     loading: true,
@@ -1828,7 +1900,10 @@ function App() {
   }, [src]);
   const kwUniverse = useMemo(() => {
     const s = new Set();
-    src.forEach(d => (d.keywords || []).forEach(k => s.add(k)));
+    src.forEach(d => {
+      (d.keywords || []).forEach(k => s.add(k));
+      (d.faction_keywords || []).forEach(k => s.add(k));
+    });
     UNIT_TYPES.forEach(t => s.delete(t));
     return [...s].sort((a, b) => a.localeCompare(b, 'fr'));
   }, [src]);
@@ -1944,7 +2019,7 @@ function App() {
         }
         if (faction && d.faction_id !== faction) return false;
         if (role && d.role !== role) return false;
-        const kwset = d._kwl || (d._kwl = (d.keywords || []).map(x => x.toLowerCase()));
+        const kwset = d._kwl || (d._kwl = [...(d.keywords || []), ...(d.faction_keywords || [])].map(x => x.toLowerCase()));
         for (const t of uts) {
           if (!kwset.includes(t)) return false;
         }
