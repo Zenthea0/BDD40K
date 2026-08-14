@@ -144,9 +144,11 @@ function loadLists() {
     if (r) {
       const d = JSON.parse(r);
       if (d && Array.isArray(d.lists)) {
+        if (!Array.isArray(d.folders)) d.folders = [];
         d.lists.forEach(l => {
           if (!Array.isArray(l.unit_ids)) l.unit_ids = [];
           if (!Array.isArray(l.detachment_ids)) l.detachment_ids = [];
+          if (l.folder_id === undefined) l.folder_id = null;
         });
         return d;
       }
@@ -154,6 +156,7 @@ function loadLists() {
   } catch (e) {}
   return {
     lists: [],
+    folders: [],
     activeListId: null
   };
 }
@@ -828,90 +831,70 @@ function ListsManager({
   onSetActive,
   onSetDetachments,
   onAnalyze,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onSetFolder,
   onClose
 }) {
   const [newName, setNewName] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
   const [confirmId, setConfirmId] = useState(null);
   const [expandDetId, setExpandDetId] = useState(null);
+  const [editFolderId, setEditFolderId] = useState(null);
+  const [editFolderName, setEditFolderName] = useState('');
+  const [confirmFolderId, setConfirmFolderId] = useState(null);
+  const [expanded, setExpanded] = useState(() => {
+    const s = new Set();
+    const a = data.lists.find(l => l.id === data.activeListId);
+    s.add(a ? a.folder_id || '_none' : '_none');
+    return s;
+  });
   const inputCls = "rounded-lg px-3 py-2 text-[14px] ink";
   const inputStyle = {
     background: 'var(--surface2)',
     border: '1px solid var(--line)'
   };
+  const selStyle = {
+    background: 'var(--surface2)',
+    border: '1px solid var(--line)',
+    color: 'var(--ink)',
+    borderRadius: 8,
+    padding: '4px 8px',
+    fontSize: 12
+  };
+  const folders = data.folders || [];
   const primaryFaction = l => {
-    const counts = {};
+    const c = {};
     (l.unit_ids || []).forEach(id => {
       const e = indexById.get(id);
       if (e) {
-        counts[e.faction_id] = (counts[e.faction_id] || 0) + 1;
+        c[e.faction_id] = (c[e.faction_id] || 0) + 1;
       }
     });
-    let best = null,
+    let b = null,
       n = -1;
-    for (const f in counts) {
-      if (counts[f] > n) {
-        n = counts[f];
-        best = f;
+    for (const f in c) {
+      if (c[f] > n) {
+        n = c[f];
+        b = f;
       }
     }
-    return best;
+    return b;
   };
   const detName = did => {
     const d = idx && idx.detachments.find(x => x.id === did);
     return d ? d.name : '?';
   };
-  return /*#__PURE__*/React.createElement("div", {
-    className: "fixed inset-0 z-50 flex flex-col justify-end",
-    onClick: onClose
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute inset-0",
-    style: {
-      background: 'rgba(0,0,0,.55)'
-    }
-  }), /*#__PURE__*/React.createElement("div", {
-    onClick: e => e.stopPropagation(),
-    className: "relative rounded-t-2xl max-h-[86vh] flex flex-col fade-in",
-    style: {
-      background: 'var(--bg)',
-      borderTop: '1px solid var(--line)',
-      paddingBottom: 'env(safe-area-inset-bottom)'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center px-4 py-3 border-b hairline"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "disp text-[18px] uppercase tracking-wide flex-1"
-  }, "Mes listes"), /*#__PURE__*/React.createElement("button", {
-    onClick: onClose,
-    className: "disp text-[20px]",
-    style: {
-      color: 'var(--steel)'
-    }
-  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
-    className: "overflow-y-auto px-4 py-3 space-y-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-2"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newName,
-    onChange: e => setNewName(e.target.value),
-    placeholder: "Nom de la nouvelle liste",
-    className: "flex-1 " + inputCls,
-    style: inputStyle
-  }), /*#__PURE__*/React.createElement("button", {
-    onClick: () => {
-      const n = newName.trim();
-      if (n) {
-        onCreate(n);
-        setNewName('');
-      }
-    },
-    className: "disp uppercase text-[13px] px-3 rounded-lg",
-    style: {
-      background: 'var(--red)',
-      color: '#fff'
-    }
-  }, "Cr\xE9er")), data.lists.length ? data.lists.map(l => {
+  const listsIn = fid => data.lists.filter(l => (l.folder_id || null) === fid);
+  const toggle = k => setExpanded(p => {
+    const s = new Set(p);
+    s.has(k) ? s.delete(k) : s.add(k);
+    return s;
+  });
+  const renderList = l => {
     const isActive = l.id === data.activeListId;
     const chosen = l.detachment_ids || [];
     const fac = primaryFaction(l);
@@ -1011,7 +994,26 @@ function ListsManager({
         color: 'var(--red)',
         border: '1px solid var(--line)'
       }
-    }, "Suppr."))), editingId !== l.id && confirmId !== l.id && l.unit_ids.length ? /*#__PURE__*/React.createElement("button", {
+    }, "Suppr."))), editingId !== l.id && confirmId !== l.id ? /*#__PURE__*/React.createElement("div", {
+      className: "mt-2 flex items-center gap-2"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-[10px] faint disp uppercase tracking-wide"
+    }, "Dossier"), /*#__PURE__*/React.createElement("select", {
+      value: l.folder_id || '',
+      onChange: e => onSetFolder(l.id, e.target.value || null),
+      style: selStyle
+    }, /*#__PURE__*/React.createElement("option", {
+      value: "",
+      style: {
+        color: '#111'
+      }
+    }, "Sans dossier"), folders.map(f => /*#__PURE__*/React.createElement("option", {
+      key: f.id,
+      value: f.id,
+      style: {
+        color: '#111'
+      }
+    }, f.nom)))) : null, editingId !== l.id && confirmId !== l.id && l.unit_ids.length ? /*#__PURE__*/React.createElement("button", {
       onClick: () => onAnalyze(l.id),
       className: "mt-2 w-full disp uppercase text-[12px] tracking-wide py-1.5 rounded",
       style: {
@@ -1041,9 +1043,167 @@ function ListsManager({
     }) : null, chosen.length >= 3 ? /*#__PURE__*/React.createElement("div", {
       className: "text-[12px] faint"
     }, "Maximum de 3 d\xE9tachements atteint.") : null) : null);
-  }) : /*#__PURE__*/React.createElement("div", {
+  };
+  const folderSection = (key, name, lists, realId) => {
+    const open = expanded.has(key);
+    return /*#__PURE__*/React.createElement("div", {
+      key: key
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-2 px-1 py-1.5",
+      style: {
+        borderBottom: '1px solid var(--line)'
+      }
+    }, editFolderId === realId && realId ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
+      value: editFolderName,
+      onChange: e => setEditFolderName(e.target.value),
+      className: "flex-1 " + inputCls,
+      style: inputStyle
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        onRenameFolder(realId, editFolderName.trim() || name);
+        setEditFolderId(null);
+      },
+      className: "disp uppercase text-[11px] px-2 py-1 rounded",
+      style: {
+        color: 'var(--steel)',
+        border: '1px solid var(--line)'
+      }
+    }, "OK")) : confirmFolderId === realId && realId ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      className: "flex-1 text-[12px]",
+      style: {
+        color: 'var(--red)'
+      }
+    }, "Supprimer le dossier \xAB ", name, " \xBB ? (listes conserv\xE9es)"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        onDeleteFolder(realId);
+        setConfirmFolderId(null);
+      },
+      className: "disp uppercase text-[11px] px-2 py-1 rounded shrink-0",
+      style: {
+        background: 'var(--red)',
+        color: '#fff'
+      }
+    }, "Oui"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setConfirmFolderId(null),
+      className: "disp uppercase text-[11px] px-2 py-1 rounded shrink-0 muted",
+      style: {
+        border: '1px solid var(--line)'
+      }
+    }, "Non")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => toggle(key),
+      className: "flex items-center gap-2 flex-1 min-w-0 text-left"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "disp",
+      style: {
+        color: 'var(--red)',
+        transform: open ? 'none' : 'rotate(-90deg)',
+        display: 'inline-block',
+        transition: 'transform .15s'
+      }
+    }, "\u25BE"), /*#__PURE__*/React.createElement("span", {
+      className: "disp uppercase text-[14px] tracking-wide truncate",
+      style: {
+        color: realId ? 'var(--ink)' : 'var(--muted)'
+      }
+    }, name), /*#__PURE__*/React.createElement("span", {
+      className: "mono text-[11px] faint"
+    }, lists.length)), realId ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      onClick: () => {
+        setEditFolderId(realId);
+        setEditFolderName(name);
+      },
+      className: "disp uppercase text-[10px] px-1.5 py-0.5 rounded muted shrink-0",
+      style: {
+        border: '1px solid var(--line)'
+      }
+    }, "Renom."), /*#__PURE__*/React.createElement("button", {
+      onClick: () => setConfirmFolderId(realId),
+      className: "disp uppercase text-[10px] px-1.5 py-0.5 rounded shrink-0",
+      style: {
+        color: 'var(--red)',
+        border: '1px solid var(--line)'
+      }
+    }, "Suppr.")) : null)), open ? /*#__PURE__*/React.createElement("div", {
+      className: "space-y-2 mt-2 mb-1"
+    }, lists.length ? lists.map(renderList) : /*#__PURE__*/React.createElement("div", {
+      className: "text-[12px] faint px-1 pb-1"
+    }, "Vide \u2014 d\xE9place une liste ici via son s\xE9lecteur \xAB Dossier \xBB.")) : null);
+  };
+  const ungrouped = listsIn(null);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 z-50 flex flex-col justify-end",
+    onClick: onClose
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "absolute inset-0",
+    style: {
+      background: 'rgba(0,0,0,.55)'
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    onClick: e => e.stopPropagation(),
+    className: "relative rounded-t-2xl max-h-[86vh] flex flex-col fade-in",
+    style: {
+      background: 'var(--bg)',
+      borderTop: '1px solid var(--line)',
+      paddingBottom: 'env(safe-area-inset-bottom)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center px-4 py-3 border-b hairline"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "disp text-[18px] uppercase tracking-wide flex-1"
+  }, "Mes listes"), /*#__PURE__*/React.createElement("button", {
+    onClick: onClose,
+    className: "disp text-[20px]",
+    style: {
+      color: 'var(--steel)'
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    className: "overflow-y-auto px-4 py-3 space-y-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: newName,
+    onChange: e => setNewName(e.target.value),
+    placeholder: "Nom de la nouvelle liste",
+    className: "flex-1 " + inputCls,
+    style: inputStyle
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const n = newName.trim();
+      if (n) {
+        onCreate(n);
+        setNewName('');
+      }
+    },
+    className: "disp uppercase text-[13px] px-3 rounded-lg",
+    style: {
+      background: 'var(--red)',
+      color: '#fff'
+    }
+  }, "Cr\xE9er")), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: newFolderName,
+    onChange: e => setNewFolderName(e.target.value),
+    placeholder: "Nom du nouveau dossier",
+    className: "flex-1 " + inputCls,
+    style: inputStyle
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const n = newFolderName.trim();
+      if (n) {
+        onCreateFolder(n);
+        setNewFolderName('');
+      }
+    },
+    className: "disp uppercase text-[13px] px-3 rounded-lg",
+    style: {
+      background: 'var(--surface2)',
+      border: '1px solid var(--line)',
+      color: 'var(--ink)'
+    }
+  }, "+ Dossier")), !data.lists.length && !folders.length ? /*#__PURE__*/React.createElement("div", {
     className: "text-center muted text-[13px] py-6"
-  }, "Aucune liste. Cr\xE9e-en une, puis ajoute des fiches avec l'\xE9toile \u2606."))));
+  }, "Aucune liste. Cr\xE9e-en une, puis ajoute des fiches avec l'\xE9toile \u2606.") : null, folders.map(f => folderSection(f.id, f.nom, listsIn(f.id), f.id)), ungrouped.length ? folderSection('_none', 'Sans dossier', ungrouped, null) : null)));
 }
 
 // ==== Moteur d'analyse (objectif 2) ====
@@ -1929,6 +2089,7 @@ function App() {
           nom: 'Ma liste',
           unit_ids: [],
           detachment_ids: [],
+          folder_id: null,
           maj: Date.now()
         };
         data.lists.push(active);
@@ -1946,9 +2107,11 @@ function App() {
       nom,
       unit_ids: [],
       detachment_ids: [],
+      folder_id: null,
       maj: Date.now()
     };
     return {
+      ...prev,
       lists: [...prev.lists, l],
       activeListId: l.id
     };
@@ -1963,10 +2126,40 @@ function App() {
   const deleteList = id => setLists(prev => {
     const rest = prev.lists.filter(l => l.id !== id);
     return {
+      ...prev,
       lists: rest,
       activeListId: prev.activeListId === id ? rest[0]?.id || null : prev.activeListId
     };
   });
+  const createFolder = nom => setLists(prev => ({
+    ...prev,
+    folders: [...(prev.folders || []), {
+      id: uid(),
+      nom
+    }]
+  }));
+  const renameFolder = (id, nom) => setLists(prev => ({
+    ...prev,
+    folders: (prev.folders || []).map(f => f.id === id ? {
+      ...f,
+      nom
+    } : f)
+  }));
+  const deleteFolder = id => setLists(prev => ({
+    ...prev,
+    folders: (prev.folders || []).filter(f => f.id !== id),
+    lists: prev.lists.map(l => l.folder_id === id ? {
+      ...l,
+      folder_id: null
+    } : l)
+  }));
+  const setListFolder = (listId, folderId) => setLists(prev => ({
+    ...prev,
+    lists: prev.lists.map(l => l.id === listId ? {
+      ...l,
+      folder_id: folderId || null
+    } : l)
+  }));
   const setActiveList = id => setLists(prev => ({
     ...prev,
     activeListId: id
@@ -2234,14 +2427,44 @@ function App() {
     className: "overflow-y-auto px-4 py-3 space-y-4"
   }, section === 'ds' && lists.lists.length ? /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "disp text-[11px] uppercase tracking-[.18em] faint mb-1.5"
-  }, "Liste"), /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-wrap gap-1.5"
-  }, lists.lists.map(l => /*#__PURE__*/React.createElement(TogglePill, {
-    key: l.id,
-    active: listFilter === l.id,
-    onClick: () => setListFilter(listFilter === l.id ? '' : l.id),
-    color: "#8a6a2b"
-  }, l.nom, " (", l.unit_ids.length, ")")))) : null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  }, "Liste"), /*#__PURE__*/React.createElement("select", {
+    value: listFilter,
+    onChange: e => setListFilter(e.target.value),
+    className: "w-full disp uppercase text-[13px] tracking-wide rounded-lg px-2.5 py-2",
+    style: {
+      background: 'var(--surface2)',
+      border: '1px solid var(--line)',
+      color: listFilter ? 'var(--ink)' : 'var(--muted)'
+    }
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "",
+    style: {
+      color: '#111'
+    }
+  }, "Aucune liste"), (lists.folders || []).map(f => {
+    const fl = lists.lists.filter(l => l.folder_id === f.id);
+    return fl.length ? /*#__PURE__*/React.createElement("optgroup", {
+      key: f.id,
+      label: f.nom
+    }, fl.map(l => /*#__PURE__*/React.createElement("option", {
+      key: l.id,
+      value: l.id,
+      style: {
+        color: '#111'
+      }
+    }, l.nom, " (", l.unit_ids.length, ")"))) : null;
+  }), (() => {
+    const fl = lists.lists.filter(l => !l.folder_id);
+    return fl.length ? /*#__PURE__*/React.createElement("optgroup", {
+      label: "Sans dossier"
+    }, fl.map(l => /*#__PURE__*/React.createElement("option", {
+      key: l.id,
+      value: l.id,
+      style: {
+        color: '#111'
+      }
+    }, l.nom, " (", l.unit_ids.length, ")"))) : null;
+  })())) : null, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "disp text-[11px] uppercase tracking-[.18em] faint mb-1.5"
   }, "Faction"), /*#__PURE__*/React.createElement(Select, {
     value: faction,
@@ -2373,6 +2596,10 @@ function App() {
       setListsOpen(false);
       setAnalysisListId(id);
     },
+    onCreateFolder: createFolder,
+    onRenameFolder: renameFolder,
+    onDeleteFolder: deleteFolder,
+    onSetFolder: setListFolder,
     onClose: () => setListsOpen(false)
   }) : null), analysisListId && lists.lists.find(l => l.id === analysisListId) ? /*#__PURE__*/React.createElement(AnalysisView, {
     list: lists.lists.find(l => l.id === analysisListId),
